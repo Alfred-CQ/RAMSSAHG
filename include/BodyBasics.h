@@ -6,6 +6,9 @@
 
 #pragma once
 
+#include <iostream>
+#include <string>
+
 #include "resource.h"
 
 class CBodyBasics
@@ -50,6 +53,9 @@ public:
     /// <param name="hInstance"></param>
     /// <param name="nCmdShow"></param>
     int                     Run(HINSTANCE hInstance, int nCmdShow);
+
+    void                    printConsole(std::string str);
+    HANDLE                  console;
 
 private:
     HWND                    m_hWnd;

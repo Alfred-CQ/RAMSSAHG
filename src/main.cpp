@@ -1,9 +1,3 @@
-//------------------------------------------------------------------------------
-// <copyright file="BodyBasics.cpp" company="Microsoft">
-//     Copyright (c) Microsoft Corporation.  All rights reserved.
-// </copyright>
-//------------------------------------------------------------------------------
-
 #include "stdafx.h"
 #include <strsafe.h>
 #include "resource.h"
@@ -30,6 +24,8 @@ int APIENTRY wWinMain(
 {
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
+
+    AllocConsole();
 
     CBodyBasics application;
     application.Run(hInstance, nShowCmd);
@@ -62,6 +58,11 @@ CBodyBasics::CBodyBasics() : m_hWnd(NULL),
     {
         m_fFreq = double(qpf.QuadPart);
     }
+
+    console = GetStdHandle(STD_OUTPUT_HANDLE);
+
+    printConsole("-- RAMSSAHG DEBUGGER --\n");
+    printConsole(std::to_string(123) + std::to_string(456));
 }
 
 /// <summary>
@@ -627,4 +628,14 @@ void CBodyBasics::DrawHand(HandState handState, const D2D1_POINT_2F &handPositio
         m_pRenderTarget->FillEllipse(ellipse, m_pBrushHandLasso);
         break;
     }
+}
+
+void CBodyBasics::printConsole(std::string data)
+{
+    const char* data_cstr =  data.c_str();
+    size_t size = mbstowcs(NULL, data_cstr, 0) + 1;
+    wchar_t* dataConsole = new wchar_t[size];
+    mbstowcs(dataConsole, data_cstr, size);
+
+    WriteConsole(console, dataConsole, size, NULL, NULL);
 }
