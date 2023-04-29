@@ -1,15 +1,11 @@
-//------------------------------------------------------------------------------
-// <copyright file="BodyBasics.h" company="Microsoft">
-//     Copyright (c) Microsoft Corporation.  All rights reserved.
-// </copyright>
-//------------------------------------------------------------------------------
-
 #pragma once
 
 #include <iostream>
 #include <string>
 
 #include "resource.h"
+
+#define DRAWING_SCALE 4
 
 class CBodyBasics
 {
@@ -63,6 +59,7 @@ public:
     DWORD                   bytes_written;
 
     bool                    connectArduino(LPCWSTR port);
+    void                    sendToArduino(const char command);
 
 private:
     HWND                    m_hWnd;

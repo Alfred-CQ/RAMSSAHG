@@ -94,6 +94,8 @@ CBodyBasics::~CBodyBasics()
     }
 
     SafeRelease(m_pKinectSensor);
+
+    FreeConsole();
 }
 
 /// <summary>
@@ -351,7 +353,6 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody **ppBodies)
                         HandState rightHandState = HandState_Unknown;
 
                         pBody->get_HandLeftState(&leftHandState);
-                        pBody->get_HandRightState(&rightHandState);
 
                         hr = pBody->GetJoints(_countof(joints), joints);
                         if (SUCCEEDED(hr))
@@ -364,7 +365,6 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody **ppBodies)
                             DrawBody(joints, jointPoints);
 
                             DrawHand(leftHandState, jointPoints[JointType_HandLeft]);
-                            DrawHand(rightHandState, jointPoints[JointType_HandRight]);
                         }
                     }
                 }
@@ -523,25 +523,6 @@ D2D1_POINT_2F CBodyBasics::BodyToScreen(const CameraSpacePoint &bodyPoint, int w
 /// <param name="pJointPoints">joint positions converted to screen space</param>
 void CBodyBasics::DrawBody(const Joint *pJoints, const D2D1_POINT_2F *pJointPoints)
 {
-    // Draw the bones
-
-    // Torso
-    DrawBone(pJoints, pJointPoints, JointType_Head, JointType_Neck);
-    DrawBone(pJoints, pJointPoints, JointType_Neck, JointType_SpineShoulder);
-    DrawBone(pJoints, pJointPoints, JointType_SpineShoulder, JointType_SpineMid);
-    DrawBone(pJoints, pJointPoints, JointType_SpineMid, JointType_SpineBase);
-    DrawBone(pJoints, pJointPoints, JointType_SpineShoulder, JointType_ShoulderRight);
-    DrawBone(pJoints, pJointPoints, JointType_SpineShoulder, JointType_ShoulderLeft);
-    DrawBone(pJoints, pJointPoints, JointType_SpineBase, JointType_HipRight);
-    DrawBone(pJoints, pJointPoints, JointType_SpineBase, JointType_HipLeft);
-
-    // Right Arm
-    DrawBone(pJoints, pJointPoints, JointType_ShoulderRight, JointType_ElbowRight);
-    DrawBone(pJoints, pJointPoints, JointType_ElbowRight, JointType_WristRight);
-    DrawBone(pJoints, pJointPoints, JointType_WristRight, JointType_HandRight);
-    DrawBone(pJoints, pJointPoints, JointType_HandRight, JointType_HandTipRight);
-    DrawBone(pJoints, pJointPoints, JointType_WristRight, JointType_ThumbRight);
-
     // Left Arm
     DrawBone(pJoints, pJointPoints, JointType_ShoulderLeft, JointType_ElbowLeft);
     DrawBone(pJoints, pJointPoints, JointType_ElbowLeft, JointType_WristLeft);
@@ -549,24 +530,16 @@ void CBodyBasics::DrawBody(const Joint *pJoints, const D2D1_POINT_2F *pJointPoin
     DrawBone(pJoints, pJointPoints, JointType_HandLeft, JointType_HandTipLeft);
     DrawBone(pJoints, pJointPoints, JointType_WristLeft, JointType_ThumbLeft);
 
-    // Right Leg
-    DrawBone(pJoints, pJointPoints, JointType_HipRight, JointType_KneeRight);
-    DrawBone(pJoints, pJointPoints, JointType_KneeRight, JointType_AnkleRight);
-    DrawBone(pJoints, pJointPoints, JointType_AnkleRight, JointType_FootRight);
-
-    // Left Leg
-    DrawBone(pJoints, pJointPoints, JointType_HipLeft, JointType_KneeLeft);
-    DrawBone(pJoints, pJointPoints, JointType_KneeLeft, JointType_AnkleLeft);
-    DrawBone(pJoints, pJointPoints, JointType_AnkleLeft, JointType_FootLeft);
-
     // Draw the joints
-    for (int i = 0; i < JointType_Count; ++i)
+    // PreferredJoints 4 5 6 7
+    int j_beg{4}, j_end{7};
+    for (int i = j_beg; i <= j_end; ++i)
     {
-        D2D1_ELLIPSE ellipse = D2D1::Ellipse(pJointPoints[i], c_JointThickness, c_JointThickness);
+        D2D1_ELLIPSE ellipse = D2D1::Ellipse(pJointPoints[i], c_JointThickness * DRAWING_SCALE, c_JointThickness * DRAWING_SCALE);
 
         if (pJoints[i].TrackingState == TrackingState_Inferred)
         {
-            m_pRenderTarget->FillEllipse(ellipse, m_pBrushJointInferred);
+            // m_pRenderTarget->FillEllipse(ellipse, m_pBrushJointInferred);
         }
         else if (pJoints[i].TrackingState == TrackingState_Tracked)
         {
@@ -603,11 +576,11 @@ void CBodyBasics::DrawBone(const Joint *pJoints, const D2D1_POINT_2F *pJointPoin
     // We assume all drawn bones are inferred unless BOTH joints are tracked
     if ((joint0State == TrackingState_Tracked) && (joint1State == TrackingState_Tracked))
     {
-        m_pRenderTarget->DrawLine(pJointPoints[joint0], pJointPoints[joint1], m_pBrushBoneTracked, c_TrackedBoneThickness);
+        m_pRenderTarget->DrawLine(pJointPoints[joint0], pJointPoints[joint1], m_pBrushBoneTracked, c_TrackedBoneThickness * DRAWING_SCALE);
     }
     else
     {
-        m_pRenderTarget->DrawLine(pJointPoints[joint0], pJointPoints[joint1], m_pBrushBoneInferred, c_InferredBoneThickness);
+        m_pRenderTarget->DrawLine(pJointPoints[joint0], pJointPoints[joint1], m_pBrushBoneInferred, c_InferredBoneThickness * DRAWING_SCALE);
     }
 }
 
@@ -624,33 +597,26 @@ void CBodyBasics::DrawHand(HandState handState, const D2D1_POINT_2F &handPositio
     {
     case HandState_Closed:
         m_pRenderTarget->FillEllipse(ellipse, m_pBrushHandClosed);
-        
-        if (WriteFile(serialArduino, &CLOSE_GRIPPER, 1, &bytes_written, NULL))
-            printConsole("Write in Arduino C\n");
-        
+        sendToArduino(CLOSE_GRIPPER);
         break;
 
     case HandState_Open:
         m_pRenderTarget->FillEllipse(ellipse, m_pBrushHandOpen);
-
-        if (WriteFile(serialArduino, &OPEN_GRIPPER, 1, &bytes_written, NULL))
-            printConsole("Write in Arduino O\n");
-
+        sendToArduino(OPEN_GRIPPER);
         break;
 
     case HandState_Lasso:
         m_pRenderTarget->FillEllipse(ellipse, m_pBrushHandLasso);
-        if (WriteFile(serialArduino, &NULL_GRIPPER, 1, &bytes_written, NULL))
-            printConsole("Write in Arduino H\n");
+        sendToArduino(NULL_GRIPPER);
         break;
     }
 }
 
 void CBodyBasics::printConsole(std::string data)
 {
-    const char* data_cstr =  data.c_str();
+    const char *data_cstr = data.c_str();
     size_t size = mbstowcs(NULL, data_cstr, 0) + 1;
-    wchar_t* dataConsole = new wchar_t[size];
+    wchar_t *dataConsole = new wchar_t[size];
     mbstowcs(dataConsole, data_cstr, size);
 
     WriteConsole(console, dataConsole, size, NULL, NULL);
@@ -708,4 +674,13 @@ bool CBodyBasics::connectArduino(LPCWSTR port)
         printConsole("Configured timeouts\n");
 
     return true;
+}
+
+void CBodyBasics::sendToArduino(const char command)
+{
+    char _command = command;
+    if (WriteFile(serialArduino, &_command, 1, &bytes_written, NULL))
+        printConsole("Sent to Arduino [ COMM ] [ " + std::string(&_command, 1) + " ]\n");
+    else
+        printConsole("Error sending to Arduino [ COMM ] [ " + std::string(&_command, 1) + " ]\n");
 }
