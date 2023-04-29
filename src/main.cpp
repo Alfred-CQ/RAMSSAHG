@@ -1,16 +1,31 @@
+#include <cmath>
+
 #include "stdafx.h"
 #include <strsafe.h>
 #include "resource.h"
 #include "BodyBasics.h"
 
+using namespace std;
+
 const char OPEN_GRIPPER = 'O';
 const char CLOSE_GRIPPER = 'C';
 const char NULL_GRIPPER = 'N';
+const char MOVE_UP = 'U';
+const char MOVE_DOWN = 'D';
+const char MOVE_LEFT = 'L';
+const char MOVE_RIGHT = 'R';
 
 static const float c_JointThickness = 3.0f;
 static const float c_TrackedBoneThickness = 6.0f;
 static const float c_InferredBoneThickness = 1.0f;
 static const float c_HandSize = 30.0f;
+
+#define NOISE 0.3f
+
+const float euclidianDistance(const CameraSpacePoint& one, const CameraSpacePoint& two)
+{
+	return sqrt(pow(two.X - one.X, 2) + pow(two.Y - one.Y, 2) + pow(two.Z - one.Z, 2));
+}
 
 /// <summary>
 /// Entry point for the application
@@ -38,25 +53,34 @@ int APIENTRY wWinMain(
 /// <summary>
 /// Constructor
 /// </summary>
-CBodyBasics::CBodyBasics() : m_hWnd(NULL),
-                             m_nStartTime(0),
-                             m_nLastCounter(0),
-                             m_nFramesSinceUpdate(0),
-                             m_fFreq(0),
-                             m_nNextStatusTime(0LL),
-                             m_pKinectSensor(NULL),
-                             m_pCoordinateMapper(NULL),
-                             m_pBodyFrameReader(NULL),
-                             m_pD2DFactory(NULL),
-                             m_pRenderTarget(NULL),
-                             m_pBrushJointTracked(NULL),
-                             m_pBrushJointInferred(NULL),
-                             m_pBrushBoneTracked(NULL),
-                             m_pBrushBoneInferred(NULL),
-                             m_pBrushHandClosed(NULL),
-                             m_pBrushHandOpen(NULL),
-                             m_pBrushHandLasso(NULL)
+    CBodyBasics::CBodyBasics() :    m_hWnd(NULL),
+                                    m_nStartTime(0),
+                                    m_nLastCounter(0),
+                                    m_nFramesSinceUpdate(0),
+                                    m_fFreq(0),
+                                    m_nNextStatusTime(0LL),
+                                    m_currentJoint(0LL),
+                                    m_pKinectSensor(NULL),
+                                    m_pCoordinateMapper(NULL),
+                                    m_pBodyFrameReader(NULL),
+                                    m_pD2DFactory(NULL),
+                                    m_pRenderTarget(NULL),
+                                    m_pBrushJointTracked(NULL),
+                                    m_pBrushJointInferred(NULL),
+                                    m_pBrushBoneTracked(NULL),
+                                    m_pBrushBoneInferred(NULL),
+                                    m_pBrushHandClosed(NULL),
+                                    m_pBrushHandOpen(NULL),
+                                    m_pBrushHandLasso(NULL),
+                                    m_prevJoints(NULL),
+                                    m_setPrevJoints(NULL),
+                                    m_nPrevJoints(30LL),
+                                    m_populatedJoints(false)
+
 {
+
+    ClearPrevJoints();
+
     LARGE_INTEGER qpf = {0};
     if (QueryPerformanceFrequency(&qpf))
     {
@@ -350,21 +374,41 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody **ppBodies)
                         Joint joints[JointType_Count];
                         D2D1_POINT_2F jointPoints[JointType_Count];
                         HandState leftHandState = HandState_Unknown;
-                        HandState rightHandState = HandState_Unknown;
 
                         pBody->get_HandLeftState(&leftHandState);
 
                         hr = pBody->GetJoints(_countof(joints), joints);
                         if (SUCCEEDED(hr))
                         {
+                            if (!m_populatedJoints)
+							{
+								m_prevJoints[m_currentJoint] = joints[JointType_ElbowLeft].Position;
+								m_setPrevJoints[m_currentJoint++] = true;
+								if (PopulatedPrevJoints()) m_populatedJoints = true;
+							}
+
                             for (int j = 0; j < _countof(joints); ++j)
                             {
                                 jointPoints[j] = BodyToScreen(joints[j].Position, width, height);
                             }
 
                             DrawBody(joints, jointPoints);
-
                             DrawHand(leftHandState, jointPoints[JointType_HandLeft]);
+
+                            if (m_populatedJoints && JointIsMoving(joints[JointType_ElbowLeft].Position))
+							{
+								CameraSpacePoint directions;
+                                direction.X = joints[JointType_ElbowLeft].Position.X - m_prevJoints[0].X; // Delta X
+                                direction.Y = joints[JointType_ElbowLeft].Position.Y - m_prevJoints[0].Y; // Delta Y
+                                direction.Z = joints[JointType_ElbowLeft].Position.Z - m_prevJoints[0].Z; // Delta Z - not considered
+                                if(direction.X > NOISE)
+                                {
+                                    if(direction.X > 0.0f) sendToArduino(MOVE_RIGHT);
+                                    else sendToArduino(MOVE_LEFT);
+                                }
+                                ClearPrevJoints() // Setting Previous Joints to zero for security
+							}
+
                         }
                     }
                 }
@@ -523,29 +567,44 @@ D2D1_POINT_2F CBodyBasics::BodyToScreen(const CameraSpacePoint &bodyPoint, int w
 /// <param name="pJointPoints">joint positions converted to screen space</param>
 void CBodyBasics::DrawBody(const Joint *pJoints, const D2D1_POINT_2F *pJointPoints)
 {
-    // Left Arm
-    DrawBone(pJoints, pJointPoints, JointType_ShoulderLeft, JointType_ElbowLeft);
-    DrawBone(pJoints, pJointPoints, JointType_ElbowLeft, JointType_WristLeft);
-    DrawBone(pJoints, pJointPoints, JointType_WristLeft, JointType_HandLeft);
-    DrawBone(pJoints, pJointPoints, JointType_HandLeft, JointType_HandTipLeft);
-    DrawBone(pJoints, pJointPoints, JointType_WristLeft, JointType_ThumbLeft);
+    // Draw the bones
 
-    // Draw the joints
-    // PreferredJoints 4 5 6 7
-    int j_beg{4}, j_end{7};
-    for (int i = j_beg; i <= j_end; ++i)
-    {
-        D2D1_ELLIPSE ellipse = D2D1::Ellipse(pJointPoints[i], c_JointThickness * DRAWING_SCALE, c_JointThickness * DRAWING_SCALE);
+	/* Only drawing left arm and*/
 
-        if (pJoints[i].TrackingState == TrackingState_Inferred)
-        {
-            // m_pRenderTarget->FillEllipse(ellipse, m_pBrushJointInferred);
-        }
-        else if (pJoints[i].TrackingState == TrackingState_Tracked)
-        {
-            m_pRenderTarget->FillEllipse(ellipse, m_pBrushJointTracked);
-        }
-    }
+	/*
+		JointType_ShoulderLeft	= 4,
+		JointType_ElbowLeft	= 5,
+		JointType_WristLeft	= 6,
+		JointType_HandLeft	= 7,
+		JointType_ShoulderRight	= 8,
+		JointType_ElbowRight	= 9,
+		JointType_WristRight	= 10,
+		JointType_HandRight	= 11,
+		JointType_SpineShoulder	= 20,
+	 */
+
+	unsigned int preferredJoints[] = { JointType_ShoulderLeft, JointType_ElbowLeft, JointType_WristLeft, JointType_HandLeft};
+
+	DrawBone(pJoints, pJointPoints, JointType_ShoulderLeft, JointType_ElbowLeft);
+	DrawBone(pJoints, pJointPoints, JointType_ElbowLeft, JointType_WristLeft);
+	DrawBone(pJoints, pJointPoints, JointType_WristLeft, JointType_HandLeft);
+	DrawBone(pJoints, pJointPoints, JointType_HandLeft, JointType_HandTipLeft);
+	DrawBone(pJoints, pJointPoints, JointType_WristLeft, JointType_ThumbLeft);
+
+	// Draw the Joints
+	for (int i = 0; i < sizeof(preferredJoints) / sizeof(preferredJoints[0]); ++i)
+	{
+		D2D1_ELLIPSE ellipse = D2D1::Ellipse(pJointPoints[preferredJoints[i]], c_JointThickness * 4, c_JointThickness * 4);
+
+		if (pJoints[preferredJoints[i]].TrackingState == TrackingState_Inferred)
+		{
+			//m_pRenderTarget->FillEllipse(ellipse, m_pBrushJointInferred);
+		}
+		else if (pJoints[preferredJoints[i]].TrackingState == TrackingState_Tracked)
+		{
+			m_pRenderTarget->FillEllipse(ellipse, m_pBrushJointTracked);
+		}
+	}
 }
 
 /// <summary>
@@ -683,4 +742,74 @@ void CBodyBasics::sendToArduino(const char command)
         printConsole("Sent to Arduino [ COMM ] [ " + std::string(&_command, 1) + " ]\n");
     else
         printConsole("Error sending to Arduino [ COMM ] [ " + std::string(&_command, 1) + " ]\n");
+}
+
+
+void CBodyBasics::ClearPrevJoints()
+{
+	for (size_t i = 0; i < m_nPrevJoints; i++)
+	{
+		m_prevJoints[i].X = m_prevJoints[i].Y = m_prevJoints[i].Z = 0.0f;
+		m_setPrevJoints[i] = false;
+	}
+	m_populatedJoints = false;
+	m_currentJoint = 0LL;
+}
+
+/*
+const bool CBodyBasics::JointIsMoving(const CameraSpacePoint& pJoint)
+{
+	if (!m_setPrevJoints[m_nPrevJoints - 1]) return false;
+	const CameraSpacePoint centroid = FindCentroid();
+	float _distance = euclidianDistance(centroid, pJoint);
+	if (_distance > LIMIT_DISTANCE) return true;
+	m_prevJoints[GetFarestIdx(pJoint)] = pJoint;
+	return false;
+}*/
+
+const bool CBodyBasics::JointIsMoving(const CameraSpacePoint& pJoint)
+{
+    if(!PopulatedPrevJoints()) return;
+    float _distance euclidianDistance(m_prevJoints[0], pJoint);
+    if(_distance > NOISE) return true;
+    m_prevJoints[(m_currentJoint++)%m_nPrevJoints] = pJoint;
+}
+
+const CameraSpacePoint CBodyBasics::FindCentroid()
+{
+	CameraSpacePoint centroid{};
+
+	centroid.X = centroid.Y = centroid.Z = 0.0f;
+
+	for (size_t i = 0; i < m_nPrevJoints; i++)
+	{
+		centroid.X += m_prevJoints[i].X;
+		centroid.Y += m_prevJoints[i].Y;
+		centroid.Z += m_prevJoints[i].Z;
+	}
+	centroid.X /= m_nPrevJoints;
+	centroid.Y /= m_nPrevJoints;
+	centroid.Z /= m_nPrevJoints;
+
+	return centroid;
+}
+
+const INT64 CBodyBasics::GetFarestIdx(const CameraSpacePoint& pJoint)
+{
+	int idx = -1;
+	float _distance = 1e9f;
+	for (size_t i = 0; i < m_nPrevJoints; i++)
+	{
+		if (euclidianDistance(pJoint, m_prevJoints[i]) > _distance)
+		{
+			_distance = euclidianDistance(pJoint, m_prevJoints[i]);
+			idx = i;
+		}
+	}
+	return idx;
+}
+
+const bool CBodyBasics::PopulatedPrevJoints()
+{
+	return m_setPrevJoints[m_nPrevJoints - 1];
 }

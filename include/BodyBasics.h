@@ -69,6 +69,7 @@ private:
     INT64                   m_nNextStatusTime;
     DWORD                   m_nFramesSinceUpdate;
 
+
     // Current Kinect
     IKinectSensor*          m_pKinectSensor;
     ICoordinateMapper*      m_pCoordinateMapper;
@@ -88,6 +89,16 @@ private:
     ID2D1SolidColorBrush*   m_pBrushHandClosed;
     ID2D1SolidColorBrush*   m_pBrushHandOpen;
     ID2D1SolidColorBrush*   m_pBrushHandLasso;
+
+    /*Add - ons*/
+    const INT64             m_nPrevJoints;
+    bool                    m_populatedJoints;
+    INT64                   m_currentJoint;
+
+    // Previous Joints
+    CameraSpacePoint*       m_prevJoints;
+    bool*                   m_setPrevJoints;
+    /*Add - ons*/
 
     /// <summary>
     /// Main processing function
@@ -159,5 +170,17 @@ private:
     /// <param name="joint0">one joint of the bone to draw</param>
     /// <param name="joint1">other joint of the bone to draw</param>
     void                    DrawBone(const Joint* pJoints, const D2D1_POINT_2F* pJointPoints, JointType joint0, JointType joint1);
+
+    /* Utility Methods*/
+    void                    ClearPrevJoints();
+
+    const bool              JointIsMoving(const CameraSpacePoint&);
+
+    const CameraSpacePoint  FindCentroid();
+
+    const INT64             GetFarestIdx(const CameraSpacePoint&);
+
+    const bool              PopulatedPrevJoints();
+
 };
 
