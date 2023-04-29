@@ -21,7 +21,8 @@ set(KINECTSDK20_DIR "C:/Program Files/Microsoft SDKs/Kinect/v2.0_1409")
 include_directories(${KINECTSDK20_DIR}/inc include)
 link_directories(${KINECTSDK20_DIR}/Lib/x64)
 
-add_executable(${PROJECT_NAME} WIN32 ${HEADERS} ${SOURCES})
+add_executable(${PROJECT_NAME} WIN32 ${HEADERS} ${SOURCES} resources/BodyBasics.rc)
+set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_RESOURCE resources/BodyBasics.rc)
 
 target_link_libraries(
     ${PROJECT_NAME} 
