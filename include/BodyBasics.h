@@ -54,8 +54,15 @@ public:
     /// <param name="nCmdShow"></param>
     int                     Run(HINSTANCE hInstance, int nCmdShow);
 
-    void                    printConsole(std::string str);
     HANDLE                  console;
+    void                    printConsole(std::string str);
+    
+    HANDLE                  serialArduino;
+    DCB                     dcbSerialParams  = { 0 };
+    COMMTIMEOUTS            timeouts = { 0 };
+    DWORD                   bytes_written;
+
+    bool                    connectArduino(LPCWSTR port);
 
 private:
     HWND                    m_hWnd;

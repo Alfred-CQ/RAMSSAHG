@@ -3,6 +3,10 @@
 #include "resource.h"
 #include "BodyBasics.h"
 
+const char OPEN_GRIPPER = 'O';
+const char CLOSE_GRIPPER = 'C';
+const char NULL_GRIPPER = 'N';
+
 static const float c_JointThickness = 3.0f;
 static const float c_TrackedBoneThickness = 6.0f;
 static const float c_InferredBoneThickness = 1.0f;
@@ -63,6 +67,8 @@ CBodyBasics::CBodyBasics() : m_hWnd(NULL),
 
     printConsole("-- RAMSSAHG DEBUGGER --\n");
     printConsole(std::to_string(123) + std::to_string(456));
+
+    connectArduino(L"COM3");
 }
 
 /// <summary>
@@ -618,14 +624,24 @@ void CBodyBasics::DrawHand(HandState handState, const D2D1_POINT_2F &handPositio
     {
     case HandState_Closed:
         m_pRenderTarget->FillEllipse(ellipse, m_pBrushHandClosed);
+        
+        if (WriteFile(serialArduino, &CLOSE_GRIPPER, 1, &bytes_written, NULL))
+            printConsole("Write in Arduino C\n");
+        
         break;
 
     case HandState_Open:
         m_pRenderTarget->FillEllipse(ellipse, m_pBrushHandOpen);
+
+        if (WriteFile(serialArduino, &OPEN_GRIPPER, 1, &bytes_written, NULL))
+            printConsole("Write in Arduino O\n");
+
         break;
 
     case HandState_Lasso:
         m_pRenderTarget->FillEllipse(ellipse, m_pBrushHandLasso);
+        if (WriteFile(serialArduino, &NULL_GRIPPER, 1, &bytes_written, NULL))
+            printConsole("Write in Arduino H\n");
         break;
     }
 }
@@ -638,4 +654,58 @@ void CBodyBasics::printConsole(std::string data)
     mbstowcs(dataConsole, data_cstr, size);
 
     WriteConsole(console, dataConsole, size, NULL, NULL);
+}
+
+bool CBodyBasics::connectArduino(LPCWSTR port)
+{
+    // Arduino Conection
+    serialArduino = CreateFile(port, GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (serialArduino == INVALID_HANDLE_VALUE)
+    {
+        printConsole("Error: Could not open serial port\n");
+        return false;
+    }
+    else
+        printConsole("Arduino connected\n");
+
+    dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
+    if (!GetCommState(serialArduino, &dcbSerialParams))
+    {
+        printConsole("Error: Could not obtain serial port parameters\n");
+        CloseHandle(serialArduino);
+        return false;
+    }
+    else
+        printConsole("Parameters obtained\n");
+
+    dcbSerialParams.BaudRate = CBR_9600;
+    dcbSerialParams.ByteSize = 8;
+    dcbSerialParams.StopBits = ONESTOPBIT;
+    dcbSerialParams.Parity = NOPARITY;
+
+    if (!SetCommState(serialArduino, &dcbSerialParams))
+    {
+        printConsole("Error: Port parameters could not be configured\n");
+        CloseHandle(serialArduino);
+        return false;
+    }
+    else
+        printConsole("Configured parameters\n");
+
+    timeouts.ReadIntervalTimeout = 50;
+    timeouts.ReadTotalTimeoutConstant = 50;
+    timeouts.ReadTotalTimeoutMultiplier = 10;
+    timeouts.WriteTotalTimeoutConstant = 50;
+    timeouts.WriteTotalTimeoutMultiplier = 10;
+
+    if (!SetCommTimeouts(serialArduino, &timeouts))
+    {
+        printConsole("Error: Serial port timeouts could not be configured.\n");
+        CloseHandle(serialArduino);
+        return false;
+    }
+    else
+        printConsole("Configured timeouts\n");
+
+    return true;
 }
