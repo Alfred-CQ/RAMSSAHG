@@ -2,7 +2,7 @@
 
 #include <iostream>
 #include <string>
-
+#include <Kinect.h>
 #include "resource.h"
 
 #define DRAWING_SCALE 4
@@ -59,7 +59,8 @@ public:
     DWORD                   bytes_written;
 
     bool                    connectArduino(LPCWSTR port);
-    void                    sendToArduino(const char command);
+    void                    sendToArduino(const char command, int value);
+    void                    sendToArduino(const char command, float value);
 
 private:
     HWND                    m_hWnd;
@@ -94,6 +95,8 @@ private:
     const INT64             m_nPrevJoints;
     bool                    m_populatedJoints;
     INT64                   m_currentJoint;
+    float                   m_upperArmLength;
+    bool                    m_scanned;
 
     // Previous Joints
     CameraSpacePoint*       m_prevJoints;
@@ -182,5 +185,8 @@ private:
 
     const bool              PopulatedPrevJoints();
 
+    void                    Scanning(const Joint& joints[JointTypeCount]);
+    
+    float                   GetRelativeMovement();
 };
 

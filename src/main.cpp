@@ -75,7 +75,9 @@ CBodyBasics::CBodyBasics() : m_hWnd(NULL),
                              m_prevJoints(NULL),
                              m_setPrevJoints(NULL),
                              m_nPrevJoints(30LL),
-                             m_populatedJoints(false)
+                             m_populatedJoints(false),
+                             m_upperArmLength(0.0f),
+                             m_scanned(false),
 
 {
     m_prevJoints = new CameraSpacePoint[m_nPrevJoints];
@@ -382,6 +384,7 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody **ppBodies)
                         hr = pBody->GetJoints(_countof(joints), joints);
                         if (SUCCEEDED(hr))
                         {
+                            Scanning();
                             if (!m_populatedJoints)
                             {
                                 m_prevJoints[m_currentJoint] = joints[JointType_ElbowLeft].Position;
@@ -394,7 +397,7 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody **ppBodies)
                             {
                                 jointPoints[j] = BodyToScreen(joints[j].Position, width, height);
                             }
-
+                            
                             DrawBody(joints, jointPoints);
                             DrawHand(leftHandState, jointPoints[JointType_HandLeft]);
 
@@ -409,26 +412,28 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody **ppBodies)
                                     printConsole(std::to_string(directions.X) + "\n");
 
                                     if (directions.X > NOISE)
-                                        sendToArduino(MOVE_RIGHT);
+                                    {
+                                        sendToArduino(MOVE_RIGHT, GetRelativeMovement(m_prevJoints[0].X + directions.X));
+                                    }
                                 }
                                 else
                                 {
                                     printConsole(std::to_string(directions.X) + "\n");
                                     if (abs(directions.X) > NOISE)
-                                        sendToArduino(MOVE_LEFT);
+                                        sendToArduino(MOVE_LEFT, GetRelativeMovement(m_prevJoints[0].X + directions.X));
                                 }
                                 if (directions.Y > 0.0f)
                                 {
                                     printConsole(std::to_string(directions.Y) + "\n");
 
                                     if (directions.Y > NOISE)
-                                        sendToArduino(MOVE_UP);
+                                        sendToArduino(MOVE_UP, GetRelativeMovement(m_prevJoints[0].X + directions.X));
                                 }
                                 else
                                 {
                                     printConsole(std::to_string(directions.Y) + "\n");
                                     if (abs(directions.Y) > NOISE)
-                                        sendToArduino(MOVE_DOWN);
+                                        sendToArduino(MOVE_DOWN, GetRelativeMovement(m_prevJoints[0].X + directions.X));
                                 }
                                 ClearPrevJoints(); // Setting Previous Joints to zero for security
                             }
@@ -757,13 +762,32 @@ bool CBodyBasics::connectArduino(LPCWSTR port)
     return true;
 }
 
-void CBodyBasics::sendToArduino(const char command)
+void CBodyBasics::sendToArduino(const char command, int value)
 {
-    char _command = command;
-    if (WriteFile(serialArduino, &_command, 1, &bytes_written, NULL))
-        printConsole("Sent to Arduino [ COMM ] [ " + std::string(&_command, 1) + " ]\n");
+    Beep(1000, 500);
+
+    string commandString = string(1, command) + std::to_string(value);
+
+    const char *_command = commandString.c_str();
+
+    if (WriteFile(serialArduino, _command, strlen(_command), &bytes_written, NULL))
+        printConsole("Sent to Arduino [ COMM ] [ " + commandString + " ]\n");
     else
-        printConsole("Error sending to Arduino [ COMM ] [ " + std::string(&_command, 1) + " ]\n");
+        printConsole("Error sending to Arduino [ COMM ] [ " + commandString + "]\n");
+}
+
+void CBodyBasics::sendToArduino(const char command, float value)
+{
+    Beep(1000, 500);
+
+    string commandString = string(1, command) + std::to_string(value);
+
+    const char *_command = commandString.c_str();
+
+    if (WriteFile(serialArduino, _command, strlen(_command), &bytes_written, NULL))
+        printConsole("Sent to Arduino [ COMM ] [ " + commandString + " ]\n");
+    else
+        printConsole("Error sending to Arduino [ COMM ] [ " + commandString + "]\n");
 }
 
 void CBodyBasics::ClearPrevJoints()
@@ -836,4 +860,17 @@ const INT64 CBodyBasics::GetFarestIdx(const CameraSpacePoint &pJoint)
 const bool CBodyBasics::PopulatedPrevJoints()
 {
     return m_setPrevJoints[m_nPrevJoints - 1];
+}
+
+void CBodyBasics::Scanning(const Joint& joints[JointTypeCount])
+{
+    if(m_scanned) return;
+    // According to some condition m_scanned becomes true
+    m_scanned = true;
+    m_upperArmLength = euclidianDistance(joints[JointType_ShoulderLeft].Position, joints[JointType_ElbowLeft].Position);
+}
+
+float CBodyBasics::GetRelativeMovement(float absoluteMovement)
+{
+    return (float)absoluteMovement/m_upperArmLength;
 }
