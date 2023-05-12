@@ -7,8 +7,9 @@
 
 char buffer[BUFFER_SIZE];
 char command;
+bool new_line = false;
 
-size_t curr_idx = 0;
+int curr_idx = -1, top_idx = 0;
 
 // Switchs
 #define limitSwitch1 11
@@ -44,8 +45,8 @@ void setup()
 	stepper2.setAcceleration(2000);
 	stepper3.setMaxSpeed(4000);
 	stepper3.setAcceleration(2000);
-	stepper4.setMaxSpeed(4000);
-	stepper4.setAcceleration(2000);
+	stepper4.setMaxSpeed(3700);
+	stepper4.setAcceleration(1850);
 
 	calibration();
 }
@@ -56,68 +57,70 @@ void loop()
 	{
 		command = Serial.read();
 
-		if (command != 'N')
-		{
-			buffer[curr_idx++] = command;
+		buffer[top_idx++] = command;
 
-			if (curr_idx == BUFFER_SIZE)
-			{
-				for (int i = 0; i < BUFFER_SIZE; ++i)
-				{
-					switch (buffer[i])
-					{
-					case 'O':
-						move_gripper(gripper_open);
-						break;
-					case 'C':
-						move_gripper(gripper_close);
-						break;
-					case 'U':
-						move_stepper(&stepper4, 15000);
-						break;
-					case 'D':
-						move_stepper(&stepper4, 5000);
-						break;
-					case 'L':
-						move_stepper(&stepper1, -3500);
-						break;
-					case 'R':
-						move_stepper(&stepper1, 0);
-						break;
-					}
-				}
-				curr_idx = 0;
-			}
-		}
-		else
-		{
-			for (int i = 0; i < BUFFER_SIZE; ++i)
-			{
-				switch (buffer[i])
-				{
-				case 'O':
-					move_gripper(gripper_open);
-					break;
-				case 'C':
-					move_gripper(gripper_close);
-					break;
-				case 'U':
-					move_stepper(&stepper4, 15000);
-					break;
-				case 'D':
-					move_stepper(&stepper4, 5000);
-					break;
-				case 'L':
-					move_stepper(&stepper1, -3500);
-					break;
-				case 'R':
-					move_stepper(&stepper1, 0);
-					break;
-				}
-			}
-			curr_idx = 0;
-		}
+		procces_buffer();
 	}
+	else
+  {
+		procces_buffer();
+    Serial.println("Hewww!");
+  }
+
+  delay(1000);
+}
+
+void procces_buffer()
+{
+	if (top_idx != BUFFER_SIZE)
+	{
+		switch (buffer[curr_idx])
+		{
+		case 'O':
+			move_gripper(gripper_open);
+			break;
+		case 'C':
+			move_gripper(gripper_close);
+			break;
+		case 'U':
+			move_stepper(&stepper4, 15000);
+			break;
+		case 'D':
+			move_stepper(&stepper4, 5000);
+			break;
+		case 'L':
+			move_stepper(&stepper1, -3500);
+			break;
+		case 'R':
+			move_stepper(&stepper1, 0);
+			break;
+		}
+
+    buffer[curr_idx] = 'N';
+
+		if (((curr_idx < top_idx) && (++curr_idx == BUFFER_SIZE)) || new_line)
+			curr_idx = 0;
+    
+    new_line = false;
+	}
+	else
+	{
+		top_idx = 0;
+    new_line = true;
+	}
+}
+
+void move_gripper(int gripper_angle)
+{
+	gripper.write(gripper_angle);
+}
+
+void move_stepper(AccelStepper *stepper, int steps)
+{
+	stepper->moveTo(steps);
+
+	while (stepper->currentPosition() != steps)
+		stepper->run();
 }
 
 void calibration()
@@ -149,17 +152,4 @@ void calibration()
 	stepper1.moveTo(-2000);
 	while (stepper1.currentPosition() != -2000)
 		stepper1.run();
-}
-
-void move_gripper(int gripper_angle)
-{
-	gripper.write(gripper_angle);
-}
-
-void move_stepper(AccelStepper *stepper, int steps)
-{
-	stepper->moveTo(steps);
-
-	while (stepper->currentPosition() != steps)
-		stepper->run();
 }
