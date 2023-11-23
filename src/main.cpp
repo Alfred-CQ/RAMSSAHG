@@ -14,15 +14,18 @@ const char MOVE_UP = 'U';
 const char MOVE_DOWN = 'D';
 const char MOVE_LEFT = 'L';
 const char MOVE_RIGHT = 'R';
+char currentAction;
+char passAction;
 
 static const float c_JointThickness = 3.0f;
 static const float c_TrackedBoneThickness = 6.0f;
 static const float c_InferredBoneThickness = 1.0f;
 static const float c_HandSize = 30.0f;
 
-#define NOISE 0.1f
+#define NOISE_X 0.13f
+#define NOISE_Y 0.1f
 
-const float euclidianDistance(const CameraSpacePoint &one, const CameraSpacePoint &two)
+const float euclidianDistance(const CameraSpacePoint& one, const CameraSpacePoint& two)
 {
     return sqrt(pow(two.X - one.X, 2) + pow(two.Y - one.Y, 2) + pow(two.Z - one.Z, 2));
 }
@@ -54,28 +57,28 @@ int APIENTRY wWinMain(
 /// Constructor
 /// </summary>
 CBodyBasics::CBodyBasics() : m_hWnd(NULL),
-                             m_nStartTime(0),
-                             m_nLastCounter(0),
-                             m_nFramesSinceUpdate(0),
-                             m_fFreq(0),
-                             m_nNextStatusTime(0LL),
-                             m_currentJoint(0LL),
-                             m_pKinectSensor(NULL),
-                             m_pCoordinateMapper(NULL),
-                             m_pBodyFrameReader(NULL),
-                             m_pD2DFactory(NULL),
-                             m_pRenderTarget(NULL),
-                             m_pBrushJointTracked(NULL),
-                             m_pBrushJointInferred(NULL),
-                             m_pBrushBoneTracked(NULL),
-                             m_pBrushBoneInferred(NULL),
-                             m_pBrushHandClosed(NULL),
-                             m_pBrushHandOpen(NULL),
-                             m_pBrushHandLasso(NULL),
-                             m_prevJoints(NULL),
-                             m_setPrevJoints(NULL),
-                             m_nPrevJoints(30LL),
-                             m_populatedJoints(false)
+m_nStartTime(0),
+m_nLastCounter(0),
+m_nFramesSinceUpdate(0),
+m_fFreq(0),
+m_nNextStatusTime(0LL),
+m_currentJoint(0LL),
+m_pKinectSensor(NULL),
+m_pCoordinateMapper(NULL),
+m_pBodyFrameReader(NULL),
+m_pD2DFactory(NULL),
+m_pRenderTarget(NULL),
+m_pBrushJointTracked(NULL),
+m_pBrushJointInferred(NULL),
+m_pBrushBoneTracked(NULL),
+m_pBrushBoneInferred(NULL),
+m_pBrushHandClosed(NULL),
+m_pBrushHandOpen(NULL),
+m_pBrushHandLasso(NULL),
+m_prevJoints(NULL),
+m_setPrevJoints(NULL),
+m_nPrevJoints(30LL),
+m_populatedJoints(false)
 
 {
     m_prevJoints = new CameraSpacePoint[m_nPrevJoints];
@@ -83,7 +86,7 @@ CBodyBasics::CBodyBasics() : m_hWnd(NULL),
 
     ClearPrevJoints();
 
-    LARGE_INTEGER qpf = {0};
+    LARGE_INTEGER qpf = { 0 };
     if (QueryPerformanceFrequency(&qpf))
     {
         m_fFreq = double(qpf.QuadPart);
@@ -94,7 +97,7 @@ CBodyBasics::CBodyBasics() : m_hWnd(NULL),
     printConsole("-- RAMSSAHG DEBUGGER --\n");
     printConsole(std::to_string(123) + std::to_string(456));
 
-    connectArduino(L"COM3");
+    connectArduino(L"COM5");
 }
 
 /// <summary>
@@ -131,7 +134,7 @@ CBodyBasics::~CBodyBasics()
 /// <param name="nCmdShow">whether to display minimized, maximized, or normally</param>
 int CBodyBasics::Run(HINSTANCE hInstance, int nCmdShow)
 {
-    MSG msg = {0};
+    MSG msg = { 0 };
     WNDCLASS wc;
 
     // Dialog custom window class
@@ -190,7 +193,7 @@ void CBodyBasics::Update()
         return;
     }
 
-    IBodyFrame *pBodyFrame = NULL;
+    IBodyFrame* pBodyFrame = NULL;
 
     HRESULT hr = m_pBodyFrameReader->AcquireLatestFrame(&pBodyFrame);
 
@@ -200,7 +203,7 @@ void CBodyBasics::Update()
 
         hr = pBodyFrame->get_RelativeTime(&nTime);
 
-        IBody *ppBodies[BODY_COUNT] = {0};
+        IBody* ppBodies[BODY_COUNT] = { 0 };
 
         if (SUCCEEDED(hr))
         {
@@ -231,16 +234,16 @@ void CBodyBasics::Update()
 /// <returns>result of message processing</returns>
 LRESULT CALLBACK CBodyBasics::MessageRouter(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-    CBodyBasics *pThis = NULL;
+    CBodyBasics* pThis = NULL;
 
     if (WM_INITDIALOG == uMsg)
     {
-        pThis = reinterpret_cast<CBodyBasics *>(lParam);
+        pThis = reinterpret_cast<CBodyBasics*>(lParam);
         SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pThis));
     }
     else
     {
-        pThis = reinterpret_cast<CBodyBasics *>(::GetWindowLongPtr(hWnd, GWLP_USERDATA));
+        pThis = reinterpret_cast<CBodyBasics*>(::GetWindowLongPtr(hWnd, GWLP_USERDATA));
     }
 
     if (pThis)
@@ -310,7 +313,7 @@ HRESULT CBodyBasics::InitializeDefaultSensor()
     if (m_pKinectSensor)
     {
         // Initialize the Kinect and get coordinate mapper and the body reader
-        IBodyFrameSource *pBodyFrameSource = NULL;
+        IBodyFrameSource* pBodyFrameSource = NULL;
 
         hr = m_pKinectSensor->Open();
 
@@ -347,7 +350,7 @@ HRESULT CBodyBasics::InitializeDefaultSensor()
 /// <param name="nBodyCount">body data count</param>
 /// <param name="ppBodies">body data in frame</param>
 /// </summary>
-void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody **ppBodies)
+void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
 {
     if (m_hWnd)
     {
@@ -365,7 +368,7 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody **ppBodies)
 
             for (int i = 0; i < nBodyCount; ++i)
             {
-                IBody *pBody = ppBodies[i];
+                IBody* pBody = ppBodies[i];
                 if (pBody)
                 {
                     BOOLEAN bTracked = false;
@@ -408,27 +411,42 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody **ppBodies)
                                 {
                                     printConsole(std::to_string(directions.X) + "\n");
 
-                                    if (directions.X > NOISE)
-                                        sendToArduino(MOVE_RIGHT);
+                                    if (directions.X > NOISE_X)
+                                    {
+                                        //passAction = MOVE_RIGHT;
+                                        sendToArduino(MOVE_LEFT);
+
+                                    }
                                 }
                                 else
                                 {
                                     printConsole(std::to_string(directions.X) + "\n");
-                                    if (abs(directions.X) > NOISE)
-                                        sendToArduino(MOVE_LEFT);
+                                    if (abs(directions.X) > NOISE_X)
+                                    {
+                                       
+                                        sendToArduino(MOVE_RIGHT);
+
+                                        //passAction = MOVE_LEFT;
+                                    }
                                 }
                                 if (directions.Y > 0.0f)
                                 {
                                     printConsole(std::to_string(directions.Y) + "\n");
 
-                                    if (directions.Y > NOISE)
+                                    if (directions.Y > NOISE_Y)
+                                    {
                                         sendToArduino(MOVE_UP);
+                                        //passAction = MOVE_UP;
+                                    } 
                                 }
                                 else
                                 {
                                     printConsole(std::to_string(directions.Y) + "\n");
-                                    if (abs(directions.Y) > NOISE)
+                                    if (abs(directions.Y) > NOISE_Y)
+                                    {
                                         sendToArduino(MOVE_DOWN);
+                                        //passAction = MOVE_DOWN;
+                                    }
                                 }
                                 ClearPrevJoints(); // Setting Previous Joints to zero for security
                             }
@@ -455,7 +473,7 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody **ppBodies)
 
         double fps = 0.0;
 
-        LARGE_INTEGER qpcNow = {0};
+        LARGE_INTEGER qpcNow = { 0 };
         if (m_fFreq)
         {
             if (QueryPerformanceCounter(&qpcNow))
@@ -485,7 +503,7 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody **ppBodies)
 /// <param name="szMessage">message to display</param>
 /// <param name="showTimeMsec">time in milliseconds to ignore future status messages</param>
 /// <param name="bForce">force status update</param>
-bool CBodyBasics::SetStatusMessage(_In_z_ WCHAR *szMessage, DWORD nShowTimeMsec, bool bForce)
+bool CBodyBasics::SetStatusMessage(_In_z_ WCHAR* szMessage, DWORD nShowTimeMsec, bool bForce)
 {
     INT64 now = GetTickCount64();
 
@@ -571,10 +589,10 @@ void CBodyBasics::DiscardDirect2DResources()
 /// <param name="width">width (in pixels) of output buffer</param>
 /// <param name="height">height (in pixels) of output buffer</param>
 /// <returns>point in screen-space</returns>
-D2D1_POINT_2F CBodyBasics::BodyToScreen(const CameraSpacePoint &bodyPoint, int width, int height)
+D2D1_POINT_2F CBodyBasics::BodyToScreen(const CameraSpacePoint& bodyPoint, int width, int height)
 {
     // Calculate the body's position on the screen
-    DepthSpacePoint depthPoint = {0};
+    DepthSpacePoint depthPoint = { 0 };
     m_pCoordinateMapper->MapCameraPointToDepthSpace(bodyPoint, &depthPoint);
 
     float screenPointX = static_cast<float>(depthPoint.X * width) / cDepthWidth;
@@ -588,7 +606,7 @@ D2D1_POINT_2F CBodyBasics::BodyToScreen(const CameraSpacePoint &bodyPoint, int w
 /// </summary>
 /// <param name="pJoints">joint data</param>
 /// <param name="pJointPoints">joint positions converted to screen space</param>
-void CBodyBasics::DrawBody(const Joint *pJoints, const D2D1_POINT_2F *pJointPoints)
+void CBodyBasics::DrawBody(const Joint* pJoints, const D2D1_POINT_2F* pJointPoints)
 {
     // Draw the bones
 
@@ -606,7 +624,7 @@ void CBodyBasics::DrawBody(const Joint *pJoints, const D2D1_POINT_2F *pJointPoin
         JointType_SpineShoulder	= 20,
      */
 
-    unsigned int preferredJoints[] = {JointType_ShoulderLeft, JointType_ElbowLeft, JointType_WristLeft, JointType_HandLeft};
+    unsigned int preferredJoints[] = { JointType_ShoulderLeft, JointType_ElbowLeft, JointType_WristLeft, JointType_HandLeft };
 
     DrawBone(pJoints, pJointPoints, JointType_ShoulderLeft, JointType_ElbowLeft);
     DrawBone(pJoints, pJointPoints, JointType_ElbowLeft, JointType_WristLeft);
@@ -638,7 +656,7 @@ void CBodyBasics::DrawBody(const Joint *pJoints, const D2D1_POINT_2F *pJointPoin
 /// <param name="pJointPoints">joint positions converted to screen space</param>
 /// <param name="joint0">one joint of the bone to draw</param>
 /// <param name="joint1">other joint of the bone to draw</param>
-void CBodyBasics::DrawBone(const Joint *pJoints, const D2D1_POINT_2F *pJointPoints, JointType joint0, JointType joint1)
+void CBodyBasics::DrawBone(const Joint* pJoints, const D2D1_POINT_2F* pJointPoints, JointType joint0, JointType joint1)
 {
     TrackingState joint0State = pJoints[joint0].TrackingState;
     TrackingState joint1State = pJoints[joint1].TrackingState;
@@ -671,7 +689,7 @@ void CBodyBasics::DrawBone(const Joint *pJoints, const D2D1_POINT_2F *pJointPoin
 /// </summary>
 /// <param name="handState">state of the hand</param>
 /// <param name="handPosition">position of the hand</param>
-void CBodyBasics::DrawHand(HandState handState, const D2D1_POINT_2F &handPosition)
+void CBodyBasics::DrawHand(HandState handState, const D2D1_POINT_2F& handPosition)
 {
     D2D1_ELLIPSE ellipse = D2D1::Ellipse(handPosition, c_HandSize, c_HandSize);
 
@@ -679,12 +697,23 @@ void CBodyBasics::DrawHand(HandState handState, const D2D1_POINT_2F &handPositio
     {
     case HandState_Closed:
         m_pRenderTarget->FillEllipse(ellipse, m_pBrushHandClosed);
-        sendToArduino(CLOSE_GRIPPER);
+        currentAction = CLOSE_GRIPPER;
+
+        if (currentAction != passAction)
+            sendToArduino(CLOSE_GRIPPER);
+
+        passAction = CLOSE_GRIPPER;
         break;
 
     case HandState_Open:
         m_pRenderTarget->FillEllipse(ellipse, m_pBrushHandOpen);
-        sendToArduino(OPEN_GRIPPER);
+        
+        currentAction = OPEN_GRIPPER;
+
+        if (currentAction != passAction)
+            sendToArduino(OPEN_GRIPPER);
+        
+        passAction = OPEN_GRIPPER;
         break;
 
     case HandState_Lasso:
@@ -695,9 +724,9 @@ void CBodyBasics::DrawHand(HandState handState, const D2D1_POINT_2F &handPositio
 
 void CBodyBasics::printConsole(std::string data)
 {
-    const char *data_cstr = data.c_str();
+    const char* data_cstr = data.c_str();
     size_t size = mbstowcs(NULL, data_cstr, 0) + 1;
-    wchar_t *dataConsole = new wchar_t[size];
+    wchar_t* dataConsole = new wchar_t[size];
     mbstowcs(dataConsole, data_cstr, size);
 
     WriteConsole(console, dataConsole, size, NULL, NULL);
@@ -788,12 +817,12 @@ const bool CBodyBasics::JointIsMoving(const CameraSpacePoint& pJoint)
     return false;
 }*/
 
-const bool CBodyBasics::JointIsMoving(const CameraSpacePoint &pJoint)
+const bool CBodyBasics::JointIsMoving(const CameraSpacePoint& pJoint)
 {
     if (!PopulatedPrevJoints())
         return false;
     float _distance = euclidianDistance(m_prevJoints[0], pJoint);
-    if (_distance > NOISE)
+    if (_distance > NOISE_X)
         return true;
     m_prevJoints[(m_currentJoint++) % m_nPrevJoints] = pJoint;
 }
@@ -818,7 +847,7 @@ const CameraSpacePoint CBodyBasics::FindCentroid()
     return centroid;
 }
 
-const INT64 CBodyBasics::GetFarestIdx(const CameraSpacePoint &pJoint)
+const INT64 CBodyBasics::GetFarestIdx(const CameraSpacePoint& pJoint)
 {
     int idx = -1;
     float _distance = 1e9f;
